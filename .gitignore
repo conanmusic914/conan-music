@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+appdata/logs/*
+appdata/cache/*
+appdata/certs/*
+music/*
+!music/.gitkeep
