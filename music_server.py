@@ -661,7 +661,9 @@ def search_kugou_grouped(keyword, page=1):
             albums[group_key]["songs"].append({
                 "name": song_name, "singer": singer, "album": album_name, "album_id": album_id,
                 "auth_key": auth_key, "is_auth": is_auth,
-                "hash": file_hash, "local_rel": local_rel, "cover": cover, "blacklisted": blacklisted
+                "hash": file_hash, "local_rel": local_rel, "cover": cover, "blacklisted": blacklisted,
+                "duration": int(item.get("Duration") or 0),
+                "filesize": int(item.get("FileSize") or 0)
             })
         return list(albums.values())
     except Exception as e:
@@ -1010,6 +1012,7 @@ ONLINE_UA = {
 }
 ONLINE_SEARCH_CACHE = {}
 ONLINE_URL_CACHE = {}
+ONLINE_DUR_CACHE = {}
 ONLINE_ALT_CACHE = {}
 ONLINE_SEARCH_TOTAL = {}
 ONLINE_RECOMMEND_CACHE = {}
@@ -1312,6 +1315,62 @@ def _online_audio_len_ok(url, expect_sec, tol=0.25):
     return False
 
 
+def _online_audio_size_ok(url, expect_size, tol=0.15):
+    """文件大小对不上（通常是错版或试听片段）就判定为错源；拿不到大小则放行"""
+    try:
+        expect = float(expect_size or 0)
+        if not url or expect <= 0:
+            return True
+        r = requests.head(url, headers={"User-Agent": ONLINE_UA["User-Agent"],
+                                        "Referer": "http://m.kugou.com/"},
+                          allow_redirects=True, timeout=(3, 8))
+        cl = r.headers.get("Content-Length") or ""
+        r.close()
+        if not cl:
+            return True
+        got = float(cl)
+        if got <= 0:
+            return True
+        if abs(got - expect) <= max(256 * 1024, expect * tol):
+            return True
+        log_system(f"在线音源大小不符已丢弃 | 期望 {int(expect)}B 实际 {int(got)}B | {str(url)[:90]}")
+        return False
+    except Exception:
+        return True
+
+
+def _kugou_hash_duration(name, singer, file_hash):
+    """按 hash 反查酷狗官方时长/文件大小（songsearch v2），用于拦截错版音源"""
+    fh = str(file_hash or "").strip().upper()
+    if not fh:
+        return 0, 0
+    ck = f"dur|{fh}"
+    hit = _mv_cache_get(ONLINE_DUR_CACHE, ck, 86400)
+    if hit:
+        return hit
+    kw = f"{str(name or '').strip()} {str(singer or '').strip()}".strip() or fh
+    try:
+        r = requests.get("https://songsearch.kugou.com/song_search_v2",
+                         params={"keyword": kw, "page": 1, "pagesize": 30,
+                                 "platform": "WebFilter", "userid": 0, "clientver": 2000,
+                                 "iscorrection": 1},
+                         headers={"User-Agent": ONLINE_UA["User-Agent"],
+                                  "Referer": "https://www.kugou.com/"},
+                         timeout=(3, 8))
+        lists = ((r.json() or {}).get("data") or {}).get("lists") or []
+        for it in lists:
+            if str(it.get("FileHash") or "").strip().upper() == fh:
+                dur = int(it.get("Duration") or 0)
+                size = int(it.get("FileSize") or 0)
+                if dur:
+                    out = (dur, size)
+                    _mv_cache_put(ONLINE_DUR_CACHE, ck, out)
+                    return out
+    except Exception as e:
+        log_system(f"反查官方时长失败 | {fh} | {e}")
+    return 0, 0
+
+
 def _online_tracker_url(file_hash):
     """酷狗官方 tracker：免费歌曲通常直接给直链（最快路径）"""
     if not file_hash:
@@ -1463,6 +1522,14 @@ def _online_musicdl_candidates(name, singer, duration=0):
 
 def online_play_payload(file_hash, name, singer, duration=0):
     """在线播放：官方 tracker → 90svip → musicdl 多源兜底；每级都校验时长，错音频直接丢弃"""
+    try:
+        duration = int(float(duration or 0))
+    except Exception:
+        duration = 0
+    expect_size = 0
+    if duration <= 0:
+        # 前端没带时长时按 hash 反查官方时长，避免校验失效放过错版音源
+        duration, expect_size = _kugou_hash_duration(name, singer, file_hash)
     cache_key = f"{file_hash}|{name}|{singer}|{int(duration or 0)}"
     cached = _mv_cache_get(ONLINE_URL_CACHE, cache_key, 1800)
     if cached is not None:
@@ -1471,6 +1538,7 @@ def online_play_payload(file_hash, name, singer, duration=0):
     def pick(url, quality):
         if not url: return None
         if not _online_audio_len_ok(url, duration): return None
+        if expect_size and not _online_audio_size_ok(url, expect_size): return None
         payload = {"url": url, "quality": quality}
         _mv_cache_put(ONLINE_URL_CACHE, cache_key, payload)
         return payload
@@ -5364,7 +5432,9 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                             "name": song["name"], "singer": song["singer"], "album": album["album"],
                             "auth_key": song["auth_key"], "is_auth": song["is_auth"],
                             "hash": song.get("hash", ""), "local_rel": song.get("local_rel", ""),
-                            "cover": song.get("cover", ""), "blacklisted": song.get("blacklisted", "")
+                            "cover": song.get("cover", ""), "blacklisted": song.get("blacklisted", ""),
+                            "duration": int(song.get("duration") or 0),
+                            "filesize": int(song.get("filesize") or 0)
                         })
             self.send_json({"data": matched, "total": len(matched), "online": online_results, "engine": MUSICDL_AVAILABLE})
         elif self.path.startswith("/api/kugou/tree"):
