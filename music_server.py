@@ -7684,9 +7684,9 @@ html.is-mobile .subtitle{font-size:13px;margin:-2px 0 6px}
       d.remove();
       var safe=env;
       if(!safe){
-        var ih=window.innerHeight||0,sh=(window.screen&&(window.screen.height||window.screen.availHeight))||0;
-        // 全屏/沉浸式容器里网页高度≈屏幕高度，说明底部伸到系统导航栏下面，补 48px；普通浏览器只补 14px
-        safe=(sh&&ih>=sh-24)?48:14;
+        var ih=window.innerHeight||0,sh=(window.screen&&(window.screen.availHeight||window.screen.height))||0;
+        // 沉浸式/全屏容器判据：网页可视高度几乎顶满可用屏幕高度（只差状态栏+标题栏），说明底部伸到了系统导航条下面，补 48px；普通浏览器可视区矮很多，只补 14px
+        safe=(sh&&ih>=sh-40)?48:14;
       }
       document.documentElement.style.setProperty("--nav-safe",safe+"px");
     }catch(e){document.documentElement.style.setProperty("--nav-safe","14px");}
