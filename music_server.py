@@ -7638,10 +7638,11 @@ button:disabled{opacity:.5;filter:grayscale(.25);cursor:not-allowed;transform:no
 /* ==================== 移动端（手机 / 平板）底部导航 ==================== */
 #mobileNav,#moreSheet,#moreMask{display:none}
 html.is-mobile #mobileNav{
-  display:flex;position:fixed;left:0;right:0;bottom:0;height:58px;z-index:1001;
+  display:flex;position:fixed;left:0;right:0;bottom:0;height:auto;min-height:58px;z-index:1001;
   background:linear-gradient(180deg,rgba(255,255,255,.045),transparent),var(--panel);
   border-top:1px solid var(--input-bg);align-items:stretch;
-  padding-bottom:env(safe-area-inset-bottom);
+  /* 底部安全区：优先用系统 env，否则用 JS 算出的 --nav-safe，最后兜底 14px */
+  padding:0 0 calc(14px + var(--nav-safe, env(safe-area-inset-bottom, 0px)));
 }
 html.is-mobile #mobileNav .nav-btn{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
@@ -7653,7 +7654,7 @@ html.is-mobile #mobileNav .nav-btn.active{color:var(--accent)}
 html.is-mobile #moreMask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000}
 html.is-mobile #moreMask.show{display:block}
 html.is-mobile #moreSheet{
-  display:none;position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));z-index:1002;
+  display:none;position:fixed;left:0;right:0;bottom:calc(72px + var(--nav-safe, env(safe-area-inset-bottom, 0px)));z-index:1002;
   background:var(--panel);border-top-left-radius:16px;border-top-right-radius:16px;
   padding:14px 12px 16px;box-shadow:0 -8px 30px rgba(0,0,0,.45);max-height:66vh;overflow-y:auto;
 }
@@ -7664,15 +7665,40 @@ html.is-mobile #moreSheet.show{display:block}
 #moreGrid button:active{background:var(--accent);color:#fff}
 html.is-mobile .topbar{display:none}
 html.is-mobile .user-bar .right{display:none}
-html.is-mobile body{padding-bottom:calc(404px + env(safe-area-inset-bottom))}
-html.is-mobile .control-wrap{bottom:calc(58px + env(safe-area-inset-bottom))!important}
+html.is-mobile body{padding-bottom:calc(418px + var(--nav-safe, env(safe-area-inset-bottom, 0px)))}
+html.is-mobile .control-wrap{bottom:calc(72px + var(--nav-safe, env(safe-area-inset-bottom, 0px)))!important}
 html.is-mobile #npCoverWrap{width:42px;height:42px;border-radius:9px}
 html.is-mobile #npTitle{font-size:13px}
 html.is-mobile #npActions button{padding:7px 9px;font-size:12px}
 html.is-mobile h1{font-size:19px;margin:0}
 html.is-mobile .subtitle{font-size:13px;margin:-2px 0 6px}
 </style></head><body>
-<script>(function(){var ua=navigator.userAgent||"";var m=/Android|iPhone|iPad|iPod|Mobile|Tablet|HarmonyOS|Phone|Kindle|Silk|PlayBook|Opera Mini/i.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);if(m)document.documentElement.classList.add("is-mobile");window.IS_MOBILE=!!m;})();</script>
+<script>(function(){var ua=navigator.userAgent||"";var m=/Android|iPhone|iPad|iPod|Mobile|Tablet|HarmonyOS|Phone|Kindle|Silk|PlayBook|Opera Mini/i.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);if(m)document.documentElement.classList.add("is-mobile");window.IS_MOBILE=!!m;})();
+(function(){
+  function calcNavSafe(){
+    try{
+      var d=document.createElement("div");
+      d.style.cssText="position:fixed;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none;";
+      document.body.appendChild(d);
+      var env=Math.round(d.getBoundingClientRect().height||0);
+      d.remove();
+      var safe=env;
+      if(!safe){
+        var ih=window.innerHeight||0,sh=(window.screen&&(window.screen.height||window.screen.availHeight))||0;
+        // 全屏/沉浸式容器里网页高度≈屏幕高度，说明底部伸到系统导航栏下面，补 48px；普通浏览器只补 14px
+        safe=(sh&&ih>=sh-24)?48:14;
+      }
+      document.documentElement.style.setProperty("--nav-safe",safe+"px");
+    }catch(e){document.documentElement.style.setProperty("--nav-safe","14px");}
+  }
+  if(window.IS_MOBILE){
+    if(document.body) calcNavSafe(); else document.addEventListener("DOMContentLoaded",calcNavSafe);
+    window.addEventListener("resize",calcNavSafe);
+    window.addEventListener("orientationchange",function(){setTimeout(calcNavSafe,300);});
+    if(window.visualViewport) window.visualViewport.addEventListener("resize",calcNavSafe);
+  }
+})();
+</script>
 <div id="loadingOverlay">
   <div class="spin-box"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><g><rect x="46" y="10" width="8" height="22" rx="3" fill="#fff"><animate attributeName="opacity" values="1;0.1" dur="1.2s" repeatCount="indefinite" begin="0s"/></rect><rect x="46" y="10" width="8" height="22" rx="3" fill="#fff" transform="rotate(45 50 50)"><animate attributeName="opacity" values="1;0.1" dur="1.2s" repeatCount="indefinite" begin="-0.15s"/></rect><rect x="46" y="10" width="8" height="22" rx="3" fill="#fff" transform="rotate(90 50 50)"><animate attributeName="opacity" values="1;0.1" dur="1.2s" repeatCount="indefinite" begin="-0.3s"/></rect><rect x="46" y="10" width="8" height="22" rx="3" fill="#fff" transform="rotate(135 50 50)"><animate attributeName="opacity" values="1;0.1" dur="1.2s" repeatCount="indefinite" begin="-0.45s"/></rect><rect x="46" y="10" width="8" height="22" rx="3" fill="#fff" transform="rotate(180 50 50)"><animate attributeName="opacity" values="1;0.1" dur="1.2s" repeatCount="indefinite" begin="-0.6s"/></rect><rect x="46" y="10" width="8" height="22" rx="3" fill="#fff" transform="rotate(225 50 50)"><animate attributeName="opacity" values="1;0.1" dur="1.2s" repeatCount="indefinite" begin="-0.75s"/></rect><rect x="46" y="10" width="8" height="22" rx="3" fill="#fff" transform="rotate(270 50 50)"><animate attributeName="opacity" values="1;0.1" dur="1.2s" repeatCount="indefinite" begin="-0.9s"/></rect><rect x="46" y="10" width="8" height="22" rx="3" fill="#fff" transform="rotate(315 50 50)"><animate attributeName="opacity" values="1;0.1" dur="1.2s" repeatCount="indefinite" begin="-1.05s"/></rect></g></svg></div>
 </div>
